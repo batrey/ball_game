@@ -1,6 +1,8 @@
 package file
 
 import (
+	"encoding/csv"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -39,6 +41,15 @@ Sue,Beth`,
 			expectedData: [][]string{
 				{"George", "Beth", "Sue"},
 				{"Rick", "Anne"},
+			},
+		},
+		{
+			name: "parses quoted names containing commas",
+			fileContent: `"George, Jr.",Beth
+Beth,"George, Jr."`,
+			expectedData: [][]string{
+				{"George, Jr.", "Beth"},
+				{"Beth", "George, Jr."},
 			},
 		},
 		{
@@ -93,6 +104,29 @@ func TestReadInputFileReturnsOpenError(t *testing.T) {
 	// then
 	if err == nil {
 		t.Fatal("expected an error, got nil")
+	}
+}
+
+func TestReadInputFileReturnsCSVParseError(t *testing.T) {
+	// given
+	fileName := writeTempFile(t, "\"George,Beth\n")
+
+	// when
+	_, err := ReadInputFile(fileName)
+
+	// then
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	var parseErr *csv.ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("expected CSV parse error, got %T", err)
+	}
+	if parseErr.Line != 1 {
+		t.Fatalf("expected parse error on line 1, got line %d", parseErr.Line)
+	}
+	if !errors.Is(err, csv.ErrQuote) {
+		t.Fatalf("expected quote parse error, got %v", err)
 	}
 }
 

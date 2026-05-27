@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -18,6 +19,9 @@ func RunCLI(args []string, stdout io.Writer, stderr io.Writer, touchCounter Touc
 
 	fileName := flags.String("file", "", "Path to the input file")
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
 		return 2
 	}
 

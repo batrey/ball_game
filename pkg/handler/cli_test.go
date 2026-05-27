@@ -54,6 +54,31 @@ func TestRunCLIRequiresFileFlag(t *testing.T) {
 	}
 }
 
+func TestRunCLIPrintsHelp(t *testing.T) {
+	// given
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	service := &fakeTouchCounter{}
+
+	// when
+	exitCode := RunCLI([]string{"-help"}, stdout, stderr, service)
+
+	// then
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", exitCode)
+	}
+	if stdout.String() != "" {
+		t.Fatalf("expected empty stdout, got %q", stdout.String())
+	}
+	expectedStderr := "Usage of ballgame:\n  -file string\n    \tPath to the input file\n"
+	if stderr.String() != expectedStderr {
+		t.Fatalf("expected help output %q, got %q", expectedStderr, stderr.String())
+	}
+	if service.calls != 0 {
+		t.Fatalf("expected service not to be called, got %d calls", service.calls)
+	}
+}
+
 func TestRunCLIReturnsServiceError(t *testing.T) {
 	// given
 	stdout := &bytes.Buffer{}

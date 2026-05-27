@@ -1,8 +1,9 @@
 package file
 
 import (
-	"bufio"
+	"encoding/csv"
 	"errors"
+	"io"
 	"os"
 	"strings"
 )
@@ -15,7 +16,7 @@ func (Reader) ReadPlayers(fileName string) ([][]string, error) {
 	return ReadInputFile(fileName)
 }
 
-// ReadInputFile reads player visibility rows from a file and ignores blank lines.
+// ReadInputFile reads CSV player visibility rows from a file and ignores blank lines.
 func ReadInputFile(fileName string) ([][]string, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -23,23 +24,26 @@ func ReadInputFile(fileName string) ([][]string, error) {
 	}
 	defer file.Close()
 
-	var data [][]string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
+	reader := csv.NewReader(file)
+	reader.FieldsPerRecord = -1
+	reader.TrimLeadingSpace = true
 
-		row := strings.Split(line, ",")
+	var data [][]string
+	for {
+		row, err := reader.Read()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
 		for i := range row {
 			row[i] = strings.TrimSpace(row[i])
 		}
+		if len(row) == 1 && row[0] == "" {
+			continue
+		}
 		data = append(data, row)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
 	}
 
 	if len(data) == 0 {

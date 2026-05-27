@@ -20,6 +20,7 @@ Rules:
 - Blank lines are ignored.
 - Empty names are invalid.
 - Names may contain special or Unicode characters.
+- Names containing commas must use CSV quoting, such as `"George, Jr.",Beth`.
 - A name can be at most 20 characters.
 
 ## Run
