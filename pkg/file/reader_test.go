@@ -2,11 +2,12 @@ package file
 
 import (
 	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 )
 
 func TestReadInputFile(t *testing.T) {
-	// Test cases for ReadInputFile function
 	tests := []struct {
 		name          string
 		fileContent   string
@@ -16,10 +17,10 @@ func TestReadInputFile(t *testing.T) {
 		{
 			name: "basic",
 			fileContent: `George,Beth,Sue
-		Rick,Anne
-		Anne,Beth
-		Beth,Anne,George
-		Sue,Beth`,
+Rick,Anne
+Anne,Beth
+Beth,Anne,George
+Sue,Beth`,
 			expectedData: [][]string{
 				{"George", "Beth", "Sue"},
 				{"Rick", "Anne"},
@@ -27,7 +28,18 @@ func TestReadInputFile(t *testing.T) {
 				{"Beth", "Anne", "George"},
 				{"Sue", "Beth"},
 			},
-			expectedError: "",
+		},
+		{
+			name: "trims spaces and skips blank lines",
+			fileContent: `
+ George , Beth , Sue
+
+ Rick , Anne
+`,
+			expectedData: [][]string{
+				{"George", "Beth", "Sue"},
+				{"Rick", "Anne"},
+			},
 		},
 		{
 			name:          "empty file",
@@ -35,44 +47,80 @@ func TestReadInputFile(t *testing.T) {
 			expectedData:  nil,
 			expectedError: "file is empty or in incorrect format",
 		},
-		// Add more test cases like duplicate players, incorrect format, etc.
+		{
+			name:          "whitespace only file",
+			fileContent:   " \n\t\n",
+			expectedData:  nil,
+			expectedError: "file is empty or in incorrect format",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a temp file and write the test content
-			tmpFile, err := os.CreateTemp("", "testfile-*.txt")
-			if err != nil {
-				t.Fatal("Failed to create temp file:", err)
-			}
-			defer os.Remove(tmpFile.Name())
+			// given
+			fileName := writeTempFile(t, tt.fileContent)
 
-			_, err = tmpFile.WriteString(tt.fileContent)
-			if err != nil {
-				t.Fatal("Failed to write to temp file:", err)
-			}
-			tmpFile.Close()
+			// when
+			data, err := ReadInputFile(fileName)
 
-			// Now, call the function with the temp file path
-			data, err := ReadInputFile(tmpFile.Name())
-
-			if err != nil && err.Error() != tt.expectedError {
-				t.Errorf("Expected error %s, but got %s", tt.expectedError, err)
-				return
-			}
-
-			if len(data) != len(tt.expectedData) {
-				t.Errorf("Expected data length %d, but got %d", len(tt.expectedData), len(data))
-				return
-			}
-
-			for i, row := range tt.expectedData {
-				for j, player := range row {
-					if data[i][j] != player {
-						t.Errorf("Expected player %s, but got %s", player, data[i][j])
-					}
+			// then
+			if tt.expectedError != "" {
+				if err == nil {
+					t.Fatal("expected an error, got nil")
 				}
+				if err.Error() != tt.expectedError {
+					t.Fatalf("expected error %q, got %q", tt.expectedError, err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected no error, got %s", err)
+			}
+			if !reflect.DeepEqual(data, tt.expectedData) {
+				t.Fatalf("expected data %v, got %v", tt.expectedData, data)
 			}
 		})
 	}
+}
+
+func TestReadInputFileReturnsOpenError(t *testing.T) {
+	// given
+	fileName := filepath.Join(t.TempDir(), "missing.txt")
+
+	// when
+	_, err := ReadInputFile(fileName)
+
+	// then
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+}
+
+func TestReaderReadPlayers(t *testing.T) {
+	// given
+	fileName := writeTempFile(t, "George,Beth\n")
+	reader := Reader{}
+
+	// when
+	data, err := reader.ReadPlayers(fileName)
+
+	// then
+	if err != nil {
+		t.Fatalf("expected no error, got %s", err)
+	}
+	expected := [][]string{{"George", "Beth"}}
+	if !reflect.DeepEqual(data, expected) {
+		t.Fatalf("expected data %v, got %v", expected, data)
+	}
+}
+
+func writeTempFile(t *testing.T, content string) string {
+	t.Helper()
+
+	fileName := filepath.Join(t.TempDir(), "players.txt")
+	if err := os.WriteFile(fileName, []byte(content), 0600); err != nil {
+		t.Fatalf("failed to write temp file: %s", err)
+	}
+
+	return fileName
 }

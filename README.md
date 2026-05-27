@@ -1,103 +1,60 @@
-# Ball Game: Touch Count Calculator
+# Ball Game Touch Counter
 
-This application calculates the maximum number of players who can touch a single ball based on mutual visibility. It takes an input file (txt) where each line denotes a player and the players they can see. It uses graph theory principles and a depth-first search algorithm to determine the touch count for each player.
+Ball Game Touch Counter reads a comma-separated visibility file and prints the maximum number of players who can touch the ball. A player can pass the ball only through mutual visibility: if `A` lists `B`, `B` must also list `A`.
 
-## Time Complexity
+## Input Format
 
-The expected time complexity of the algorithm for a file with \( n \) players, where each player can see at most \( m \) other players, is \( O(n \times m) \).
+Each non-blank line starts with a player, followed by the players they can see:
 
-In the provided implementation:
-
-- Parsing the file has a time complexity of \( O(n) \) since we read the file line by line.
-- Building the adjacency list (graph) is \( O(n \times m) \) as we iterate over each player and then the players they can see.
-- The depth-first search (DFS) also runs at \( O(n \times m) \) as, in the worst case, we might end up visiting all players and all their adjacent players.
-
-Hence, combining all steps, our solution's time complexity is \( O(n \times m) \).
-
-## Error Handling
-
-The application is equipped to handle erroneous input data:
-
-- If a player's name exceeds 20 characters, a relevant error message is thrown.
-- If the input file is not in the expected format or is empty, the program will notify the user with a descriptive error message.
-
-## Language and Execution
-
-The solution is written in Go (Golang).
-
-### Prerequisites
-
-- Ensure you have Go 1.19 installed. If not, download and install it from [here](https://golang.org/dl/).
-
-### Compiling and Running
-
-1. Navigate to the directory containing the code.
-2. Run the application using:
-
-```bash
-go run main.go -file /path/to/your/inputfile.txt
+```text
+George,Beth,Sue
+Rick,Anne
+Anne,Beth
+Beth,Anne,George
+Sue,Beth
 ```
 
-or
+Rules:
 
-Build the Game:
+- Names are trimmed for surrounding whitespace.
+- Blank lines are ignored.
+- Empty names are invalid.
+- Names may contain special or Unicode characters.
+- A name can be at most 20 characters.
+
+## Run
+
+Requires Go 1.19 or newer.
+
+```bash
+go run . -file /path/to/players.txt
+```
+
+Build a binary:
 
 ```bash
 go build -o ballgame
+./ballgame -file /path/to/players.txt
 ```
 
-This will produce an executable named ballgame in your project directory.
-
-Running the Game
-After building the project, you can run the game using the following command:
-
-On Windows, you might run:
-
-```bash
-ballgame.exe
-```
-
-```bash
-go run ballgame -file /path/to/your/input
-```
-
-Replace `/path/to/your/inputfile.txt` with the path to your input file.
-
-It looks like you have comprehensive test suites for different components of your program. Here's a rewritten testing section for your README based on the tests you provided:
-
----
-
-## Testing
-
-### How to Run the Tests
-
-To run the provided tests, navigate to the root directory of the project and execute:
+## Test
 
 ```bash
 go test ./...
 ```
 
-### Test Overview
+## Project Structure
 
-We have tests for both the core game logic and the file reader.
+```text
+main.go              wires the CLI handler, service, and file reader
+pkg/handler          command-line boundary: flags, stdout/stderr, exit codes
+pkg/service          orchestration: read player data, build graph, calculate result
+pkg/file             file-backed data access
+pkg/game             domain logic: graph building and mutual-visibility traversal
+```
 
-#### Game Tests (`game_test.go`)
+## Algorithm
 
-1. **Graph Building (`TestBuildGraph`)**: This test verifies that the `BuildGraph` function processes player visibility correctly and forms the right graph structure. Test cases include:
-   - Basic input
-   - Empty input
-   - Players being able to see themselves
-   - Multiple isolated players
-   - Extra spaces in input
+The app builds an adjacency list from the input file, then finds the largest connected component using only reciprocal edges. For example, `A -> B` counts only when `B -> A` also exists.
 
-2. **Special Character Handling (`TestSpecialCharactersInNames`)**: Tests the ability of the system to handle special characters in player names without errors.
-
-3. **Touch Calculation (`TestCalculateTouchesForPlayer`)**:
-   - This test checks the logic for counting how many players a given player can touch.
-   - Scenarios tested include basic visibility, isolated players, chains of players, cycles in visibility, star topology, large graphs, unconnected subgraphs, players not present in the graph, non-reciprocal visibility, and self visibility.
-
-#### File Reader Tests (`reader_test.go`)
-
-1. **File Reading (`TestReadInputFile`)**:
-   - This test verifies that the file reading function can correctly read and parse different formats of input files.
-   - Test cases include basic input and empty files. You can expand this test with more cases like duplicate players, incorrect file format, etc.
+`MaxTouches` visits each graph component once, so the calculation is linear in the number of players plus visibility entries.

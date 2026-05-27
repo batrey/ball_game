@@ -7,7 +7,15 @@ import (
 	"strings"
 )
 
-// ReadInputFile reads the player's data file and returns a slice of slices.
+// Reader loads player visibility data from files.
+type Reader struct{}
+
+// ReadPlayers reads player visibility rows from the given file.
+func (Reader) ReadPlayers(fileName string) ([][]string, error) {
+	return ReadInputFile(fileName)
+}
+
+// ReadInputFile reads player visibility rows from a file and ignores blank lines.
 func ReadInputFile(fileName string) ([][]string, error) {
 	file, err := os.Open(fileName)
 	if err != nil {
@@ -18,7 +26,12 @@ func ReadInputFile(fileName string) ([][]string, error) {
 	var data [][]string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		row := strings.Split(scanner.Text(), ",")
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		row := strings.Split(line, ",")
 		for i := range row {
 			row[i] = strings.TrimSpace(row[i])
 		}

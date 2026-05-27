@@ -1,7 +1,7 @@
 package game
 
 import (
-	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -9,12 +9,18 @@ import (
 func TestBuildGraph(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    string
+		input    [][]string
 		expected map[string]map[string]bool
 	}{
 		{
-			name:  "Basic input",
-			input: "George,Beth,Sue\nRick,Anne\nAnne,Beth\nBeth,Anne,George\nSue,Beth\n",
+			name: "basic input",
+			input: [][]string{
+				{"George", "Beth", "Sue"},
+				{"Rick", "Anne"},
+				{"Anne", "Beth"},
+				{"Beth", "Anne", "George"},
+				{"Sue", "Beth"},
+			},
 			expected: map[string]map[string]bool{
 				"George": {"Beth": true, "Sue": true},
 				"Rick":   {"Anne": true},
@@ -24,20 +30,24 @@ func TestBuildGraph(t *testing.T) {
 			},
 		},
 		{
-			name:     "Empty input",
-			input:    "",
+			name:     "empty input",
+			input:    nil,
 			expected: map[string]map[string]bool{},
 		},
 		{
-			name:  "Player can see self",
-			input: "George,George,Beth,Sue\n",
+			name:  "player can see self",
+			input: [][]string{{"George", "George", "Beth", "Sue"}},
 			expected: map[string]map[string]bool{
 				"George": {"George": true, "Beth": true, "Sue": true},
 			},
 		},
 		{
-			name:  "Multiple players, isolated",
-			input: "A\nB\nC\n",
+			name: "multiple isolated players",
+			input: [][]string{
+				{"A"},
+				{"B"},
+				{"C"},
+			},
 			expected: map[string]map[string]bool{
 				"A": {},
 				"B": {},
@@ -45,82 +55,112 @@ func TestBuildGraph(t *testing.T) {
 			},
 		},
 		{
-			name:  "Extra spaces",
-			input: " George , Beth , Sue \nRick , Anne\n",
+			name: "trims extra spaces",
+			input: [][]string{
+				{" George ", " Beth ", " Sue "},
+				{"Rick ", " Anne"},
+			},
 			expected: map[string]map[string]bool{
 				"George": {"Beth": true, "Sue": true},
 				"Rick":   {"Anne": true},
+			},
+		},
+		{
+			name: "deduplicates repeated visible players",
+			input: [][]string{
+				{"George", "Beth", "Beth"},
+			},
+			expected: map[string]map[string]bool{
+				"George": {"Beth": true},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lines := strings.Split(tt.input, "\n")
-			var data [][]string
-			for _, line := range lines {
-				if line != "" {
-					parts := strings.Split(line, ",")
-					for i, part := range parts {
-						parts[i] = strings.TrimSpace(part)
-					}
-					data = append(data, parts)
-				}
-			}
+			// given / when
+			graph, err := BuildGraph(tt.input)
 
-			graph, err := BuildGraph(data)
+			// then
 			if err != nil {
-				t.Errorf("Expected no error, but got %s", err)
+				t.Fatalf("expected no error, got %s", err)
 			}
-
-			if !compareGraphs(graph, tt.expected) {
-				t.Errorf("Expected graph to be %v but got %v", tt.expected, graph)
+			if !reflect.DeepEqual(graph, tt.expected) {
+				t.Fatalf("expected graph %v, got %v", tt.expected, graph)
 			}
 		})
 	}
 }
 
-func TestSpecialCharactersInNames(t *testing.T) {
-	dataWithSpecialChars := [][]string{
-		{"Al@n", "Br!an", "Car#ol"},
-		{"Br&ian", "Al(an", "Diana%", "Ev^a"},
+func TestBuildGraphRejectsInvalidRows(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       [][]string
+		expectedErr string
+	}{
+		{
+			name:        "empty row",
+			input:       [][]string{{}},
+			expectedErr: "row is empty or in incorrect format",
+		},
+		{
+			name:        "empty player name",
+			input:       [][]string{{" "}},
+			expectedErr: "player name cannot be empty",
+		},
+		{
+			name:        "empty visible player name",
+			input:       [][]string{{"Alice", " "}},
+			expectedErr: "player name cannot be empty",
+		},
+		{
+			name:        "too long player name",
+			input:       [][]string{{strings.Repeat("A", 21)}},
+			expectedErr: "player name exceeds maximum length of 20 characters",
+		},
 	}
 
-	_, err := BuildGraph(dataWithSpecialChars)
-	if err != nil {
-		t.Fatalf("Expected no error for special characters in names, but got: %s", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// given / when
+			_, err := BuildGraph(tt.input)
+
+			// then
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+			if err.Error() != tt.expectedErr {
+				t.Fatalf("expected error %q, got %q", tt.expectedErr, err.Error())
+			}
+		})
 	}
 }
 
-func compareGraphs(a, b map[string]map[string]bool) bool {
-	if len(a) != len(b) {
-		return false
-	}
+func TestBuildGraphCountsUnicodeNameLengthByCharacter(t *testing.T) {
+	// given
+	playerName := strings.Repeat("å", 20)
 
-	for k, v := range a {
-		if _, exists := b[k]; !exists {
-			return false
-		}
-		for kk, vv := range v {
-			if b[k][kk] != vv {
-				return false
-			}
-		}
+	// when
+	graph, err := BuildGraph([][]string{{playerName}})
+
+	// then
+	if err != nil {
+		t.Fatalf("expected no error, got %s", err)
 	}
-	return true
+	if _, exists := graph[playerName]; !exists {
+		t.Fatalf("expected graph to contain %q, got %v", playerName, graph)
+	}
 }
 
 func TestCalculateTouchesForPlayer(t *testing.T) {
-
 	tests := []struct {
 		name     string
 		player   string
 		graph    map[string]map[string]bool
 		expected int
-		want     int
 	}{
 		{
-			name:   "George basic",
+			name:   "basic mutual visibility",
 			player: "George",
 			graph: map[string]map[string]bool{
 				"George": {"Beth": true, "Sue": true},
@@ -132,25 +172,25 @@ func TestCalculateTouchesForPlayer(t *testing.T) {
 			expected: 3,
 		},
 		{
-			name:     "Isolated player",
+			name:     "isolated player",
 			player:   "Sam",
 			graph:    map[string]map[string]bool{"Sam": {}},
 			expected: 1,
 		},
 		{
-			name:     "Chain of players",
+			name:     "chain without reciprocal visibility",
 			player:   "A",
 			graph:    map[string]map[string]bool{"A": {"B": true}, "B": {"C": true}, "C": {"D": true}, "D": {}},
-			expected: 1, // Only 'A' can touch the ball since there's no mutual visibility between the players in the chain.
+			expected: 1,
 		},
 		{
-			name:     "Cycle of players",
+			name:     "cycle of players",
 			player:   "Adam",
 			graph:    map[string]map[string]bool{"Adam": {"Eve": true, "Steve": true}, "Eve": {"Steve": true, "Adam": true}, "Steve": {"Adam": true, "Eve": true}},
 			expected: 3,
 		},
 		{
-			name:   "Star topology",
+			name:   "star topology",
 			player: "Center",
 			graph: map[string]map[string]bool{
 				"Center": {"A": true, "B": true, "C": true},
@@ -161,44 +201,19 @@ func TestCalculateTouchesForPlayer(t *testing.T) {
 			expected: 4,
 		},
 		{
-			name:   "Large graph, single connection",
-			player: "Z",
-			graph: func() map[string]map[string]bool {
-				g := make(map[string]map[string]bool)
-				for i := 'A'; i <= 'Z'; i++ {
-					g[string(i)] = make(map[string]bool)
-				}
-				g["Z"]["Y"] = true
-				g["Y"]["Z"] = true // Ensure mutual visibility
-				return g
-			}(),
-			expected: 2,
-		},
-		{
-			name:   "Graph with unconnected subgraphs",
-			player: "A",
-			graph: map[string]map[string]bool{
-				"A": {"B": true},
-				"B": {"A": true},
-				"C": {"D": true},
-				"D": {"C": true},
-			},
-			expected: 2,
-		},
-		{
-			name:     "Player not present in the graph",
+			name:     "player not present in graph",
 			player:   "E",
 			graph:    map[string]map[string]bool{"A": {"B": true}, "B": {"A": true}},
 			expected: 0,
 		},
 		{
-			name:     "Visibility not reciprocal",
+			name:     "direct visibility must be reciprocal",
 			player:   "A",
-			graph:    map[string]map[string]bool{"A": {"B": true}, "B": {"A": true}},
-			expected: 2,
+			graph:    map[string]map[string]bool{"A": {"B": true}, "B": {}},
+			expected: 1,
 		},
 		{
-			name:     "Graph with self visibility",
+			name:     "self visibility does not double count",
 			player:   "A",
 			graph:    map[string]map[string]bool{"A": {"A": true}},
 			expected: 1,
@@ -207,21 +222,60 @@ func TestCalculateTouchesForPlayer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			visited := resetVisitedMap()
-
+			// given / when
 			result := CalculateTouchesForPlayer(tt.player, tt.graph)
 
-			// Add debugging lines
-			fmt.Printf("Test '%s': Visited map: %v\n", tt.name, visited)
-
+			// then
 			if result != tt.expected {
-				t.Errorf("Expected %d players, but got %d", tt.expected, result)
+				t.Fatalf("expected %d players, got %d", tt.expected, result)
 			}
 		})
 	}
 }
 
-// A helper function to reset the visited map
-func resetVisitedMap() map[string]bool {
-	return make(map[string]bool)
+func TestMaxTouches(t *testing.T) {
+	tests := []struct {
+		name     string
+		graph    map[string]map[string]bool
+		expected int
+	}{
+		{
+			name:     "empty graph",
+			graph:    map[string]map[string]bool{},
+			expected: 0,
+		},
+		{
+			name: "returns largest mutual component",
+			graph: map[string]map[string]bool{
+				"A": {"B": true},
+				"B": {"A": true},
+				"C": {"D": true},
+				"D": {"C": true, "E": true},
+				"E": {"D": true},
+			},
+			expected: 3,
+		},
+		{
+			name: "ignores one-way visibility",
+			graph: map[string]map[string]bool{
+				"A": {"B": true},
+				"B": {},
+				"C": {"D": true},
+				"D": {"C": true},
+			},
+			expected: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// given / when
+			result := MaxTouches(tt.graph)
+
+			// then
+			if result != tt.expected {
+				t.Fatalf("expected %d players, got %d", tt.expected, result)
+			}
+		})
+	}
 }
